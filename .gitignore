@@ -17,3 +17,5 @@ pcb/*.bin
 pcb/20kleypad-gerber.zip
 pcb/fp-info-cache
 pcb/sym-lib-table
+*.blend1
+*.bak
