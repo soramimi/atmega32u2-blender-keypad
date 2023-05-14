@@ -35,18 +35,18 @@ static uint8_t key_matrix[KEY_MATRIX_ROWS];
 
 const PROGMEM char keytable_default[] = {
 	0x29, 0x1e, 0x1f, 0x20,
-	0x06, 0x05, 0x04, 0x0f,
+	0x06, 0x07, 0x04, 0x0f,
 	0x2b, 0x0a, 0x15, 0x16,
 	0x00, 0x1b, 0x1c, 0x1d,
-	0x00, 0x00, 0x07, 0x00,
+	0x00, 0x00, 0x05, 0x00,
 };
 
 const PROGMEM char keytable_1[] = {
 	0x28, 0x00, 0x00, 0x00,
-	0x1a, 0x11, 0x08, 0x0c,
-	0x12, 0x0e, 0x09, 0x10,
-	0x00, 0x0b, 0x13, 0x0d,
-	0x63, 0x00, 0x19, 0x00,
+	0x1a, 0x19, 0x08, 0x0c,
+	0x14, 0x0d, 0x0e, 0x10,
+	0x12, 0x0b, 0x13, 0x09,
+	0x63, 0x11, 0x18, 0x00,
 };
 
 void clear_key(uint8_t key)
@@ -108,6 +108,11 @@ uint8_t read_key_pins()
 	return pins & 0x0f;
 }
 
+bool is_extra_key_pressed()
+{
+	return key_matrix[4] & 0x08;
+}
+
 bool scan_key_matrix_line(int row)
 {
 	char const *keytable = keytable_default;
@@ -158,10 +163,13 @@ bool scan_key_matrix_line(int row)
 			}
 		}
 	}
+
+#if 0
 	if (row == 4 && (key_matrix[row] & 0x08) && !(pins & 0x08)) {
 		// when the extra key released, release all keys
 		release_all_keys();
 	}
+#endif
 
 	key_matrix[row] = pins;
 
@@ -247,7 +255,13 @@ int main()
 					if (key_changed && send_ready) {
 						send_ready = false;
 						key_changed = false;
-						usb_keyboard_send();
+						const int N = sizeof(keyboard_data);
+						uint8_t data[N];
+						memcpy(data, keyboard_data, N);
+						if (is_extra_key_pressed()) {
+							data[0] = 0; // release modifiers
+						}
+						usb_keyboard_send(data);
 						debug(0);
 					}
 					matrix_line = 0;

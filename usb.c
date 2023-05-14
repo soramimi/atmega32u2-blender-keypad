@@ -357,9 +357,9 @@ int8_t usb_send(uint8_t ep, uint8_t const *ptr, int len)
 }
 
 #if KEYBOARD_ENABLED
-int8_t usb_keyboard_send()
+int8_t usb_keyboard_send(uint8_t const *data)
 {
-	return usb_send(KEYBOARD_ENDPOINT, keyboard_data, 8);
+	return usb_send(KEYBOARD_ENDPOINT, data, 8);
 }
 #endif
 

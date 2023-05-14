@@ -15,7 +15,7 @@ uint8_t usb_configured();		// is the USB port configured
 void usb_remote_wakeup();
 
 #if KEYBOARD_ENABLED
-int8_t usb_keyboard_send();
+int8_t usb_keyboard_send(uint8_t const *data);
 extern uint8_t keyboard_data[8];
 extern volatile uint8_t keyboard_leds;
 #endif

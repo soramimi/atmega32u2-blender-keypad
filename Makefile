@@ -25,4 +25,4 @@ clean:
 	rm -f *.hex
 
 write: $(TARGET).hex
-	ftavr --avr-write-fuse-e f4 --avr-write-fuse-h d9 --avr-write-fuse-l 5e -w $(TARGET).hex
+	avrdude -c avrisp -P /dev/ttyACM0 -b 19200 -p $(MCU) -U efuse:w:0xf4:m -U hfuse:w:0xd9:m -U lfuse:w:0x5e:m -U flash:w:$(TARGET).hex
