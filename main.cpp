@@ -108,7 +108,9 @@ bool scan_key_matrix_line(int row)
 {
 	char const *keytable = keytable_default;
 
-	if (key_matrix[4] & 0x08) { // extra modifier
+	bool extra_modifier = bool(key_matrix[4] & 0x08);
+
+	if (extra_modifier) {
 		keytable = keytable_1;
 	}
 
@@ -131,6 +133,7 @@ bool scan_key_matrix_line(int row)
 		}
 	}
 
+
 	if (key_matrix[row] ^ pins) {
 		if (row == 3) {
 			if (pins & 0x01) { // shift
@@ -140,14 +143,14 @@ bool scan_key_matrix_line(int row)
 			}
 		} else if (row == 4) {
 			if (pins & 0x01) { // ctrl
-				if (!(key_matrix[4] & 0x08)) {
+				if (!extra_modifier) {
 					press_key(0xe0);
 				}
 			} else {
 				release_key(0xe0);
 				release_key(0x63); // numpad .
 			}
-			if (pins & 0x02) { // alt
+			if ((pins & 0x02) && !extra_modifier) { // alt
 				press_key(0xe2);
 			} else {
 				release_key(0xe2);
@@ -155,7 +158,7 @@ bool scan_key_matrix_line(int row)
 		}
 	}
 
-	if (row == 4 && (key_matrix[row] & 0x08) && !(pins & 0x08)) {
+	if (row == 4 && extra_modifier && !(pins & 0x08)) {
 		// when the extra modifier released, release other modifier keys
 		extra_modifier_released = true;
 	}
