@@ -26,35 +26,69 @@ ISR(TIMER0_OVF_vect, ISR_NOBLOCK)
 	}
 }
 
+void led(int n, bool f)
+{
+	uint8_t mask = 0x10 << n;
+	if (f) {
+		PORTB |= mask;
+	} else {
+		PORTB &= ~mask;
+	}
+}
+
+extern "C" void debug(int n)
+{
+	led(0, n & 1);
+	led(1, n & 2);
+	led(2, n & 4);
+}
+
 #if KEYBOARD_ENABLED
 
 #define KEY_MATRIX_ROWS 5
+#define KEY_MATRIX_COLS 4
+
 static bool key_changed = false;
 static int matrix_line = 0;
 static uint8_t key_matrix[KEY_MATRIX_ROWS];
 static bool extra_modifier_released = false;
+static uint8_t layout_mode = 0;
 
 const PROGMEM char keytable_default[] = {
 	0x29, 0x1e, 0x1f, 0x20,
-	0x06, 0x07, 0x04, 0x0f,
+	0x06, 0x0f, 0x07, 0x08,
 	0x2b, 0x0a, 0x15, 0x16,
 	0x00, 0x1b, 0x1c, 0x1d,
 	0x00, 0x00, 0x05, 0x00,
 };
 
 const PROGMEM char keytable_1[] = {
-	0x28, 0x00, 0x00, 0x00,
-	0x1a, 0x19, 0x08, 0x0c,
+	0x28, 0x17, 0x12, 0x11,
+	0x1a, 0x04, 0x19, 0x0c,
 	0x14, 0x0d, 0x0e, 0x10,
-	0x12, 0x0b, 0x13, 0x09,
-	0x63, 0x11, 0x18, 0x00,
+	0x00, 0x0b, 0x13, 0x09,
+	0x00, 0x00, 0x18, 0x00,
 };
 
-void clear_key(uint8_t key)
+void set_layout_mode(uint8_t mode)
 {
+	layout_mode = mode;
+	led(2, mode == 0);
+	led(1, mode == 1);
+	led(0, mode == 2);
+}
+
+bool clear_key(uint8_t key)
+{
+	bool changed = false;
 	if (key > 0) {
 		if (key >= 0xe0 && key < 0xe8) {
-			keyboard_data[0] &= ~(1 << (key - 0xe0));
+			uint8_t c = keyboard_data[0];
+			uint8_t d = c & ~(1 << (key - 0xe0));
+			if (c != d) {
+				keyboard_data[0] = d;
+				changed = true;
+			}
 		}
 		uint8_t i = 8;
 		while (i > 2) {
@@ -65,26 +99,36 @@ void clear_key(uint8_t key)
 				}
 				keyboard_data[7] = 0;
 			}
+			changed = true;
 		}
 	}
+	return changed;
 }
 
-void release_key(uint8_t key)
+bool press_key(uint8_t key, bool pressed)
 {
-	clear_key(key);
-	keyboard_data[1] = 0;
-}
-
-void press_key(uint8_t key)
-{
-	if (key >= 0xe0 && key < 0xe8) {
-		keyboard_data[0] |= 1 << (key - 0xe0);
-	} else if (key > 0) {
-		clear_key(key);
-		memmove(keyboard_data + 3, keyboard_data + 2, 5);
-		keyboard_data[2] = key;
+	bool changed = false;
+	if (pressed) {
+		if (key >= 0xe0 && key < 0xe8) {
+			uint8_t c = keyboard_data[0];
+			uint8_t d = c | (1 << (key - 0xe0));
+			if (c != d) {
+				keyboard_data[0] = d;
+				changed = true;
+			}
+		} else if (key > 0) {
+			if (keyboard_data[2] != key) {
+				clear_key(key);
+				memmove(keyboard_data + 3, keyboard_data + 2, 5);
+				keyboard_data[2] = key;
+				changed = true;
+			}
+		}
+	} else {
+		changed |= clear_key(key);
 	}
 	keyboard_data[1] = 0;
+	return changed;
 }
 
 void select_key_matrix_line(int i)
@@ -106,85 +150,131 @@ uint8_t read_key_pins()
 
 bool scan_key_matrix_line(int row)
 {
-	char const *keytable = keytable_default;
+	static uint16_t curremt_key_code = 0;
+	static uint8_t single_shot_state = 0;
 
+	const bool is_last_row = (row == KEY_MATRIX_ROWS - 1);
+
+	uint8_t modifier_mask = 0x07;
+	enum {
+		MM_CTRL  = 0x01,
+		MM_SHIFT = 0x02,
+		MM_ALT   = 0x04,
+	};
+
+	bool changed = false;
 	bool extra_modifier = bool(key_matrix[4] & 0x08);
 
+	char const *keytable = keytable_default;
 	if (extra_modifier) {
 		keytable = keytable_1;
 	}
 
-	bool changed = false;
-	uint8_t pins = read_key_pins();
-	for (int col = 0; col < 4; col++) {
-		int c = pgm_read_byte(keytable + (4 * row + col));
-		bool f = (pins >> col) & 1;
-		bool g = (key_matrix[row] >> col) & 1;
-		if (f) {
-			if (!g) {
-				press_key(c);
-				changed = true;
+	if (single_shot_state == 8) {
+		single_shot_state = extra_modifier ? 2 : 0;
+		press_key((uint8_t)curremt_key_code, false);
+		curremt_key_code = 0;
+		changed = true;
+	} else {
+		uint8_t bits = 0;
+		for (int r = 0; r < KEY_MATRIX_ROWS; r++) {
+			bits |= key_matrix[r];
+		}
+		if (bits == 0) {
+			single_shot_state = 0;
+			curremt_key_code = 0;
+		}
+	}
+
+	uint8_t prev_pins = key_matrix[row];
+	uint8_t curr_pins = read_key_pins();
+
+	for (int col = 0; col < KEY_MATRIX_COLS; col++) {
+		int i = 4 * row + col;
+		int c = pgm_read_byte(keytable + i);
+		bool curr = (curr_pins >> col) & 1;
+		bool prev = (prev_pins >> col) & 1;
+		if (curr) {
+			if (!prev) {
+				switch (i) {
+				case 4 * 3 + 0:
+					c = 0x5f | (MM_SHIFT << 8); // shift + keypad 7
+					break;
+				case 4 * 4 + 0:
+					c = 0x63; // keypad .
+					break;
+				case 4 * 4 + 1:
+					//set_layout_mode((layout_mode + 1) % 3);
+					c = 0;
+					break;
+				case 4 * 4 + 3:
+					single_shot_state |= 2;
+					c = 0;
+					break;
+				default:
+					if (c != 0) {
+						press_key((uint8_t)curremt_key_code, false);
+						press_key(c, true);
+						curremt_key_code = c;
+						changed = true;
+					}
+					single_shot_state = 1;
+					break;
+				}
+				if (c != 0) {
+					if (single_shot_state == 0 || single_shot_state == 2) {
+						if (curremt_key_code != c) {
+							curremt_key_code = c;
+							single_shot_state |= 4;
+						} else {
+							single_shot_state = 1;
+						}
+					}
+				}
 			}
 		} else {
-			if (g) {
-				release_key(c);
-				changed = true;
-			}
-		}
-	}
-
-
-	if (key_matrix[row] ^ pins) {
-		if (row == 3) {
-			if (pins & 0x01) { // shift
-				press_key(0xe1);
-			} else {
-				release_key(0xe1);
-			}
-		} else if (row == 4) {
-			if (pins & 0x01) { // ctrl
-				if (!extra_modifier) {
-					press_key(0xe0);
+			if (prev) {
+				if (single_shot_state == 6) {
+					single_shot_state = 7;
+				} else {
+					press_key((uint8_t)curremt_key_code, false);
+					changed = true;
 				}
-			} else {
-				release_key(0xe0);
-				release_key(0x63); // numpad .
-			}
-			if ((pins & 0x02) && !extra_modifier) { // alt
-				press_key(0xe2);
-			} else {
-				release_key(0xe2);
 			}
 		}
 	}
 
-	if (row == 4 && extra_modifier && !(pins & 0x08)) {
-		// when the extra modifier released, release other modifier keys
-		extra_modifier_released = true;
+	if (is_last_row) {
+		uint8_t mod = 0;
+
+		if (single_shot_state == 7) {
+			single_shot_state = 8;
+			mod = curremt_key_code >> 8;
+			press_key((uint8_t)curremt_key_code, true);
+			changed = true;
+		} else {
+			mod = modifier_mask;
+			if (!(key_matrix[4] & 0x01)) mod &= ~MM_CTRL;
+			if (!(key_matrix[3] & 0x01)) mod &= ~MM_SHIFT;
+			if (!(key_matrix[4] & 0x02)) mod &= ~MM_ALT;
+		}
+
+		changed |= press_key(0xe0, mod & MM_CTRL); // ctrl
+		changed |= press_key(0xe1, mod & MM_SHIFT); // shift
+		changed |= press_key(0xe2, mod & MM_ALT); // alt
+
+		if (extra_modifier && !(key_matrix[4] & 0x08)) {
+			// when the extra modifier released, release other modifier keys
+			extra_modifier_released = true;
+			changed = true;
+		}
 	}
 
-	key_matrix[row] = pins;
+	key_matrix[row] = curr_pins;
 
 	return changed;
 }
 #endif
-
-void led(int n, bool f)
-{
-	uint8_t mask = 0x10 << n;
-	if (f) {
-		PORTB |= mask;
-	} else {
-		PORTB &= ~mask;
-	}
-}
-
-extern "C" void debug(int n)
-{
-	led(0, n & 1);
-	led(1, n & 2);
-	led(2, n & 4);
-}
 
 int main()
 {
@@ -224,13 +314,10 @@ int main()
 	select_key_matrix_line(matrix_line);
 #endif
 
-	while (1) {
-		if (0) {//if (_time_ms < 500) {
-			led(0, true);
-		} else {
-			led(0, false);
-		}
+	set_layout_mode(0);
 
+	while (1) {
+		_delay_us(1);
 		bool send_ready = false;
 		if (time_ms != _time_ms) {
 			time_ms = _time_ms;
@@ -255,7 +342,6 @@ int main()
 							data[0] = 0; // release modifiers
 						}
 						usb_keyboard_send(data);
-						debug(0);
 					}
 					matrix_line = 0;
 				}
