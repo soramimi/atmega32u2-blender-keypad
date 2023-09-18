@@ -28,7 +28,7 @@ ISR(TIMER0_OVF_vect, ISR_NOBLOCK)
 
 void led(int n, bool f)
 {
-	uint8_t mask = 0x10 << n;
+	uint8_t mask = 0x40 >> n;
 	if (f) {
 		PORTB |= mask;
 	} else {
@@ -48,34 +48,90 @@ extern "C" void debug(int n)
 #define KEY_MATRIX_ROWS 5
 #define KEY_MATRIX_COLS 4
 
+enum {
+	MM_CTRL  = 0x01,
+	MM_SHIFT = 0x02,
+	MM_ALT   = 0x04,
+	MM_EXTRA = 0x08,
+};
+
 static bool key_changed = false;
 static int matrix_line = 0;
 static uint8_t key_matrix[KEY_MATRIX_ROWS];
+static uint8_t modifiers = 0;
 static bool extra_modifier_released = false;
 static uint8_t layout_mode = 0;
 
-const PROGMEM char keytable_default[] = {
-	0x29, 0x1e, 0x1f, 0x20,
-	0x06, 0x0f, 0x07, 0x08,
-	0x2b, 0x0a, 0x15, 0x16,
-	0x00, 0x1b, 0x1c, 0x1d,
-	0x00, 0x00, 0x05, 0x00,
+const PROGMEM char keytable_empty[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
-const PROGMEM char keytable_1[] = {
+const PROGMEM char keytable_0a[] = {
+	0x29, 0x1e, 0x1f, 0x20,
+	0x05, 0x04, 0x07, 0x08,
+	0x2b, 0x0a, 0x15, 0x16,
+	0x00, 0x1b, 0x1c, 0x1d,
+	0x00, 0x00, 0x14, 0x00,
+};
+
+const PROGMEM char keytable_0b[] = {
 	0x28, 0x17, 0x12, 0x11,
-	0x1a, 0x04, 0x19, 0x0c,
-	0x14, 0x0d, 0x0e, 0x10,
+	0x06, 0x0f, 0x19, 0x0c,
+	0x1a, 0x0d, 0x0e, 0x10,
 	0x00, 0x0b, 0x13, 0x09,
 	0x00, 0x00, 0x18, 0x00,
+};
+
+const PROGMEM char keytable_0c[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	char(0x5f | (MM_SHIFT << 8))/*shift+pad7*/, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const PROGMEM char keytable_1a[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const PROGMEM char keytable_1b[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const PROGMEM char keytable_2a[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const PROGMEM char keytable_2b[] = {
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
 void set_layout_mode(uint8_t mode)
 {
 	layout_mode = mode;
-	led(2, mode == 0);
+	led(0, mode == 0);
 	led(1, mode == 1);
-	led(0, mode == 2);
+	led(2, mode == 2);
 }
 
 bool clear_key(uint8_t key)
@@ -152,27 +208,35 @@ bool scan_key_matrix_line(int row)
 {
 	static uint16_t curremt_key_code = 0;
 	static uint8_t single_shot_state = 0;
+	static uint8_t modifier_mask = 0;
 
 	const bool is_last_row = (row == KEY_MATRIX_ROWS - 1);
 
-	uint8_t modifier_mask = 0x07;
-	enum {
-		MM_CTRL  = 0x01,
-		MM_SHIFT = 0x02,
-		MM_ALT   = 0x04,
-	};
-
-	bool changed = false;
-	bool extra_modifier = bool(key_matrix[4] & 0x08);
-
-	char const *keytable = keytable_default;
-	if (extra_modifier) {
-		keytable = keytable_1;
+	if (row == 0) {
+		modifier_mask = 0x07;
 	}
 
-	if (single_shot_state == 8) {
-		single_shot_state = extra_modifier ? 2 : 0;
-		press_key((uint8_t)curremt_key_code, false);
+	bool changed = false;
+
+	char const *keytable = keytable_empty;
+	{
+		bool ex = modifiers & MM_EXTRA;
+		switch (layout_mode) {
+		default:
+			keytable = !ex ? keytable_0a : keytable_0b;
+			break;
+		case 1:
+			keytable = !ex ? keytable_1a : keytable_1b;
+			break;
+		case 2:
+			keytable = !ex ? keytable_2a : keytable_2b;
+			break;
+		}
+	}
+
+	if (single_shot_state == 8) { // シングルショット送信済み
+		single_shot_state = !(modifiers & MM_EXTRA) ? 0 : 2; // シングルショット処理済み
+		press_key((uint8_t)curremt_key_code, false); // シングルショット開放
 		curremt_key_code = 0;
 		changed = true;
 	} else {
@@ -180,7 +244,7 @@ bool scan_key_matrix_line(int row)
 		for (int r = 0; r < KEY_MATRIX_ROWS; r++) {
 			bits |= key_matrix[r];
 		}
-		if (bits == 0) {
+		if (bits == 0) { // すべてのキーが離された
 			single_shot_state = 0;
 			curremt_key_code = 0;
 		}
@@ -195,48 +259,60 @@ bool scan_key_matrix_line(int row)
 		bool curr = (curr_pins >> col) & 1;
 		bool prev = (prev_pins >> col) & 1;
 		if (curr) {
-			if (!prev) {
+			if (!prev) { // 押された
+				bool normal = true;
 				switch (i) {
+				case 1:
+				case 2:
+				case 3:
+					if (modifiers & MM_ALT) {
+						set_layout_mode(i - 1);
+						normal = false;
+						c = 0;
+					}
+					break;
 				case 4 * 3 + 0:
-					c = 0x5f | (MM_SHIFT << 8); // shift + keypad 7
+					if (layout_mode == 0) {
+						normal = false;
+						c = 0x5f | (MM_SHIFT << 8); // shift + keypad 7
+					}
 					break;
 				case 4 * 4 + 0:
-					c = 0x63; // keypad .
-					break;
-				case 4 * 4 + 1:
-					//set_layout_mode((layout_mode + 1) % 3);
-					c = 0;
+					if (layout_mode == 0) {
+						normal = false;
+						c = 0x63; // keypad .
+					}
 					break;
 				case 4 * 4 + 3:
-					single_shot_state |= 2;
+					single_shot_state |= 2; // シングルショット押下待ち
+					normal = false;
 					c = 0;
 					break;
-				default:
-					if (c != 0) {
+				}
+				if (normal) {
+					if (c != 0) { // 通常のキー押下
 						press_key((uint8_t)curremt_key_code, false);
 						press_key(c, true);
 						curremt_key_code = c;
 						changed = true;
 					}
-					single_shot_state = 1;
-					break;
-				}
-				if (c != 0) {
+					single_shot_state = 1; // シングルショット無効
+				} else if (c != 0) {
 					if (single_shot_state == 0 || single_shot_state == 2) {
 						if (curremt_key_code != c) {
 							curremt_key_code = c;
-							single_shot_state |= 4;
+							single_shot_state |= 4; // シングルショット送信待ち
 						} else {
-							single_shot_state = 1;
+							single_shot_state = 1; // シングルショット無効
 						}
 					}
 				}
 			}
 		} else {
-			if (prev) {
-				if (single_shot_state == 6) {
-					single_shot_state = 7;
-				} else {
+			if (prev) { // 離された
+				if (single_shot_state == 6) { // シングルショット送信待ち状態？
+					single_shot_state = 7; // シングルショット送信予約
+				} else { // 通常のキー開放
 					press_key((uint8_t)curremt_key_code, false);
 					changed = true;
 				}
@@ -244,33 +320,51 @@ bool scan_key_matrix_line(int row)
 		}
 	}
 
-	if (is_last_row) {
-		uint8_t mod = 0;
+	key_matrix[row] = curr_pins;
 
-		if (single_shot_state == 7) {
-			single_shot_state = 8;
-			mod = curremt_key_code >> 8;
+	if (is_last_row) {
+		modifiers = 0;
+
+		if (single_shot_state == 7) { // シングルショット送信予約状態？
+			single_shot_state = 8; // シングルショット送信
+			modifiers = curremt_key_code >> 8;
 			press_key((uint8_t)curremt_key_code, true);
 			changed = true;
 		} else {
-			mod = modifier_mask;
-			if (!(key_matrix[4] & 0x01)) mod &= ~MM_CTRL;
-			if (!(key_matrix[3] & 0x01)) mod &= ~MM_SHIFT;
-			if (!(key_matrix[4] & 0x02)) mod &= ~MM_ALT;
+			if (layout_mode == 0) {
+				auto SETMODIFIER = [&](bool f, uint8_t bit){
+					if (f && (modifier_mask & bit)) {
+						modifiers |= bit;
+					} else {
+						modifiers &= ~bit;
+					}
+				};
+				SETMODIFIER(key_matrix[4] & 0x01, MM_CTRL);
+				SETMODIFIER(key_matrix[3] & 0x01, MM_SHIFT);
+				SETMODIFIER(key_matrix[4] & 0x02, MM_ALT);
+			} else {
+				modifiers = 0;
+			}
 		}
 
-		changed |= press_key(0xe0, mod & MM_CTRL); // ctrl
-		changed |= press_key(0xe1, mod & MM_SHIFT); // shift
-		changed |= press_key(0xe2, mod & MM_ALT); // alt
-
-		if (extra_modifier && !(key_matrix[4] & 0x08)) {
-			// when the extra modifier released, release other modifier keys
-			extra_modifier_released = true;
-			changed = true;
+		if (key_matrix[4] & 0x08) {
+			modifiers |= MM_EXTRA;
+		} else {
+			if (modifiers & MM_EXTRA) {
+				// when the extra modifier released, release other modifier keys
+				extra_modifier_released = true;
+				changed = true;
+			}
+			modifiers &= ~MM_EXTRA;
+			if (single_shot_state != 8) {
+				single_shot_state = 0;
+			}
 		}
+
+		changed |= press_key(0xe0, modifiers & MM_CTRL); // ctrl
+		changed |= press_key(0xe1, modifiers & MM_SHIFT); // shift
+		changed |= press_key(0xe2, modifiers & MM_ALT); // alt
 	}
-
-	key_matrix[row] = curr_pins;
 
 	return changed;
 }
