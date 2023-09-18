@@ -272,15 +272,16 @@ bool scan_key_matrix_line(int row)
 					case 3:
 						if (two_stroke) {
 							set_layout_mode(i - 1);
-							c = 0;
 						}
 						break;
-					}
-					if (c == 0) {
-						two_stroke = false;
-					} else {
-						curremt_key_code = c;
-						single_shot_state = 6; // シングルショット送信待ち
+					default:
+						if (c == 0) {
+							two_stroke = false;
+						} else {
+							curremt_key_code = c;
+							single_shot_state = 6; // シングルショット送信待ち
+						}
+						break;
 					}
 				} else {
 					bool normal = true;
