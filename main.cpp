@@ -99,24 +99,6 @@ const PROGMEM uint16_t keytable_0t[] = {
 // layout set 1
 
 const PROGMEM uint16_t keytable_1a[] = {
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-
-const PROGMEM uint16_t keytable_1b[] = {
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-
-// layout set 2
-
-const PROGMEM uint16_t keytable_2a[] = {
 	0x29, 0x04, 0x0e, 0x10,
 	0x2c, 0x0c, 0x16, 0x1c,
 	0x00, 0x18, 0x17, 0x15,
@@ -124,7 +106,7 @@ const PROGMEM uint16_t keytable_2a[] = {
 	0x00, 0x12, 0x0b, 0x00,
 };
 
-const PROGMEM uint16_t keytable_2b[] = {
+const PROGMEM uint16_t keytable_1b[] = {
 	0x28, 0x4c, 0x0a, 0x14,
 	0x2b, 0x2a, 0x1d, 0x0d,
 	0x00, 0x09, 0x07, 0x0f,
@@ -132,27 +114,53 @@ const PROGMEM uint16_t keytable_2b[] = {
 	0x00, 0x13, 0x05, 0x00,
 };
 
-const PROGMEM uint16_t keytable_2c[] = {
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x8b, 0x52, 0x8a,
-	0x00, 0x50, 0x2d, 0x4f,
-	0x00, 0x8b | (MM_CTRL << 8), 0x51, 0x8a | (MM_CTRL << 8),
-	0x00, 0x09 | ((MM_CTRL | MM_SHIFT) << 8), 0x0d | ((MM_CTRL | MM_SHIFT) << 8), 0x00,
+const PROGMEM uint16_t keytable_1c[] = { // MM_EXTRA2
+	0x8b, 0x8a, 0x30, 0x32,
+	0xff, 0x4a, 0x52, 0x4b,
+	0xff, 0x50, 0x2d, 0x4f,
+	0xff, 0x4d, 0x51, 0x4e,
+	0xff, 0x36, 0x37, 0x00,
 };
 
-const PROGMEM uint16_t keytable_2t[] = {
-	0x00, 0x36, 0x30, 0x32,
+const PROGMEM uint16_t keytable_1t[] = { // two stroke 1
+	0xff, 0x00, 0x00, 0x00,
 	0x2f, 0x24, 0x25, 0x26,
-	0x00, 0x21, 0x22, 0x23,
-	0x00, 0x1e, 0x1f, 0x20,
-	0x00, 0x27, 0x37, 0x36,
+	0xff, 0x21, 0x22, 0x23,
+	0xff, 0x1e, 0x1f, 0x20,
+	0xff, 0x27, 0x37, 0x36,
 };
 
-const PROGMEM uint16_t keytable_2u[] = {
+const PROGMEM uint16_t keytable_1u[] = { // two stroke 2
+	0xff, 0x00, 0x00, 0x00,
+	0xff, 0x8b, 0x8a, 0xff,
+	0xff, 0x8b | (MM_CTRL << 8), 0x8a | (MM_CTRL << 8), 0x35,
+	0xff, 0x09 | ((MM_CTRL | MM_SHIFT) << 8), ((MM_CTRL | MM_SHIFT) << 8), 0x88,
+	0xff, 0x36, 0x37, 0x00,
+};
+
+const PROGMEM uint16_t keytable_1v[] = { // two stroke 3
+	0xff, 0x00, 0x00, 0x00,
+	0x2f, 0x2d, 0x2e, 0x89,
+	0xff, 0x33, 0x34, 0x30,
+	0xff, 0x38, 0x87, 0x32,
+	0xff, 0x36, 0x37, 0x00,
+};
+
+// layout set 2
+
+const PROGMEM uint16_t keytable_2a[] = {
+	0x29, 0x00, 0x00, 0x00,
+	0x3a, 0x3b, 0x3c, 0x3d,
+	0x3e, 0x3f, 0x40, 0x41,
+	0x42, 0x43, 0x44, 0x45,
 	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x4a, 0x52, 0x4b,
-	0x00, 0x50, 0xff, 0x4f,
-	0x00, 0x4d, 0x51, 0x4e,
+};
+
+const PROGMEM uint16_t keytable_2b[] = {
+	0x28, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
 
@@ -253,14 +261,14 @@ bool scan_key_matrix_line(int row)
 			keytable = !ex ? keytable_0a : keytable_0b;
 			break;
 		case 1:
-			keytable = !ex ? keytable_1a : keytable_1b;
+			if (!(modifiers & MM_EXTRA2)) {
+				keytable = !ex ? keytable_1a : keytable_1b;
+			} else {
+				keytable = keytable_1c;
+			}
 			break;
 		case 2:
-			if (!(modifiers & MM_EXTRA2)) {
-				keytable = !ex ? keytable_2a : keytable_2b;
-			} else {
-				keytable = keytable_2c;
-			}
+			keytable = !ex ? keytable_2a : keytable_2b;
 			break;
 		}
 		break;
@@ -270,9 +278,9 @@ bool scan_key_matrix_line(int row)
 			keytable = keytable_0t;
 			break;
 		case 1:
+			keytable = keytable_1t;
 			break;
 		case 2:
-			keytable = keytable_2t;
 			break;
 		}
 		break;
@@ -281,9 +289,20 @@ bool scan_key_matrix_line(int row)
 		default:
 			break;
 		case 1:
+			keytable = keytable_1u;
 			break;
 		case 2:
-			keytable = keytable_2u;
+			break;
+		}
+		break;
+	case 3:
+		switch (layout_set) {
+		default:
+			break;
+		case 1:
+			keytable = keytable_1v;
+			break;
+		case 2:
 			break;
 		}
 		break;
@@ -334,29 +353,46 @@ bool scan_key_matrix_line(int row)
 						if (c == 0) {
 							two_stroke = 0;
 						} else {
-							current_key_code = c;
-							single_shot_state = 6; // シングルショット送信待ち
+							if (layout_set == 0) {
+								current_key_code = c;
+								single_shot_state = 6; // シングルショット送信待ち（離されたときにキーが送信される）
+								c = 0;
+							}
 						}
 						break;
 					}
-				} else if (c & 0xff00) {
+				}
+				if (c & 0xff00) {
 					current_key_code = c;
 					single_shot_state = 7;
 				} else {
 					bool normal = true;
 					switch (i) {
+					case 4 * 2 + 0:
+						if (ex) {
+							if (two_stroke == 0) {
+								two_stroke = 3;
+								normal = false;
+								c = 0;
+							}
+						}
+						break;
 					case 4 * 3 + 0:
 						if (ex) {
-							two_stroke = 2;
-							normal = false;
-							c = 0;
+							if (two_stroke == 0) {
+								two_stroke = 2;
+								normal = false;
+								c = 0;
+							}
 						}
 						break;
 					case 4 * 4 + 0:
 						if (ex) {
-							two_stroke = 1;
-							normal = false;
-							c = 0;
+							if (two_stroke == 0) {
+								two_stroke = 1;
+								normal = false;
+								c = 0;
+							}
 						}
 						break;
 					case 4 * 4 + 3:
@@ -415,14 +451,16 @@ bool scan_key_matrix_line(int row)
 					modifiers &= ~bit;
 				}
 			};
-			if (two_stroke == 0) {
-				SETMODIFIER(key_matrix[4] & 0x01, MM_CTRL);
+			SETMODIFIER(key_matrix[4] & 0x01, MM_CTRL);
+			if (layout_set == 0) {
 				SETMODIFIER(key_matrix[3] & 0x01, MM_SHIFT);
-				if (layout_set == 0) {
-					SETMODIFIER(key_matrix[4] & 0x02, MM_ALT);
-				} else if (layout_set == 2) {
-					SETMODIFIER(key_matrix[2] & 0x01, MM_EXTRA2);
-				}
+				SETMODIFIER(key_matrix[4] & 0x02, MM_ALT);
+			} else if (layout_set == 1) {
+				SETMODIFIER(key_matrix[3] & 0x01, MM_SHIFT);
+				SETMODIFIER(key_matrix[2] & 0x01, MM_EXTRA2);
+			} else if (layout_set == 2) {
+				SETMODIFIER(key_matrix[4] & 0x02, MM_SHIFT);
+				SETMODIFIER(key_matrix[4] & 0x04, MM_ALT);
 			}
 		}
 
