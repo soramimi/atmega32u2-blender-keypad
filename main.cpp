@@ -89,10 +89,10 @@ const PROGMEM uint16_t keytable_0b[] = {
 };
 
 const PROGMEM uint16_t keytable_0t[] = {
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
+	0xff, 0x00, 0x00, 0x00,
+	0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff,
 	0x63/*pad.*/, 0x5f | (MM_SHIFT << 8)/*shift+pad7*/, 0x5d/*pad5*/, 0x00,
 };
 
@@ -348,7 +348,7 @@ bool scan_key_matrix_line(int row)
 					case 2:
 					case 3:
 						set_layout_set(i - 1);
-						break;
+						continue;
 					default:
 						if (c == 0) {
 							two_stroke = 0;
@@ -356,7 +356,7 @@ bool scan_key_matrix_line(int row)
 							if (layout_set == 0) {
 								current_key_code = c;
 								single_shot_state = 6; // シングルショット送信待ち（離されたときにキーが送信される）
-								c = 0;
+								continue;
 							}
 						}
 						break;
@@ -365,58 +365,47 @@ bool scan_key_matrix_line(int row)
 				if (c & 0xff00) {
 					current_key_code = c;
 					single_shot_state = 7;
-				} else {
-					bool normal = true;
-					switch (i) {
-					case 4 * 2 + 0:
-						if (ex) {
-							if (two_stroke == 0) {
-								two_stroke = 3;
-								normal = false;
-								c = 0;
-							}
-						}
-						break;
-					case 4 * 3 + 0:
-						if (ex) {
-							if (two_stroke == 0) {
-								two_stroke = 2;
-								normal = false;
-								c = 0;
-							}
-						}
-						break;
-					case 4 * 4 + 0:
-						if (ex) {
-							if (two_stroke == 0) {
-								two_stroke = 1;
-								normal = false;
-								c = 0;
-							}
-						}
-						break;
-					case 4 * 4 + 3:
-						single_shot_state |= 2; // シングルショット押下待ち
-						normal = false;
-						c = 0;
-						break;
+					continue;
+				}
+				bool normal = true;
+				switch (i) {
+				case 4 * 2 + 0:
+					if (ex && two_stroke == 0) {
+						two_stroke = 3;
+						continue;
 					}
-					if (normal) {
-						if (c != 0) { // 通常のキー押下
-							press_key((uint8_t)current_key_code, false);
-							press_key(c, true);
+					break;
+				case 4 * 3 + 0:
+					if (ex && two_stroke == 0) {
+						two_stroke = 2;
+						continue;
+					}
+					break;
+				case 4 * 4 + 0:
+					if (ex && two_stroke == 0) {
+						two_stroke = 1;
+						continue;
+					}
+					break;
+				case 4 * 4 + 3:
+					single_shot_state |= 2; // シングルショット押下待ち
+					continue;
+				}
+				if (normal) {
+					if (c != 0) { // 通常のキー押下
+						press_key((uint8_t)current_key_code, false);
+						press_key(c, true);
+						current_key_code = c;
+						changed = true;
+					}
+					single_shot_state = 1; // シングルショット無効
+				} else if (c != 0) {
+					if (single_shot_state == 0 || single_shot_state == 2) {
+						if (current_key_code != c) {
 							current_key_code = c;
-							changed = true;
-						}
-						single_shot_state = 1; // シングルショット無効
-					} else if (c != 0) {
-						if (single_shot_state == 0 || single_shot_state == 2) {
-							if (current_key_code != c) {
-								current_key_code = c;
-								single_shot_state |= 4; // シングルショット送信待ち
-							} else {
-								single_shot_state = 1; // シングルショット無効
-							}
+							single_shot_state |= 4; // シングルショット送信待ち
+						} else {
+							single_shot_state = 1; // シングルショット無効
 						}
 					}
 				}
