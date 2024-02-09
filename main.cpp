@@ -60,6 +60,7 @@ enum {
 	MM_ALT    = 0x04,
 	MM_EXTRA  = 0x08,
 	MM_EXTRA2 = 0x10,
+	MM_SINGLESHOT = 0x80
 };
 
 static bool key_changed = false;
@@ -93,7 +94,7 @@ const PROGMEM uint16_t keytable_0t[] = {
 	0xff, 0xff, 0xff, 0xff,
 	0xff, 0xff, 0xff, 0xff,
 	0xff, 0xff, 0xff, 0xff,
-	0x63/*pad.*/, 0x5f | (MM_SHIFT << 8)/*shift+pad7*/, 0x5d/*pad5*/, 0x00,
+	0x63/*pad.*/, 0x5f | ((MM_SINGLESHOT | MM_SHIFT) << 8)/*shift+pad7*/, 0x5d/*pad5*/, 0x00,
 };
 
 // layout set 1
@@ -133,16 +134,16 @@ const PROGMEM uint16_t keytable_1t[] = { // two stroke 1
 const PROGMEM uint16_t keytable_1u[] = { // two stroke 2
 	0xff, 0x00, 0x00, 0x00,
 	0xff, 0x8b, 0x8a, 0xff,
-	0xff, 0x8b | (MM_CTRL << 8), 0x8a | (MM_CTRL << 8), 0x35,
-	0xff, 0x09 | ((MM_CTRL | MM_SHIFT) << 8), ((MM_CTRL | MM_SHIFT) << 8), 0x88,
+	0xff, 0x8b | ((MM_SINGLESHOT | MM_CTRL) << 8), 0x8a | ((MM_SINGLESHOT | MM_CTRL) << 8), 0x35,
+	0xff, 0x09 | ((MM_SINGLESHOT | MM_CTRL | MM_SHIFT) << 8), 0x0d | ((MM_SINGLESHOT | MM_CTRL | MM_SHIFT) << 8), 0x88,
 	0xff, 0x36, 0x37, 0x00,
 };
 
 const PROGMEM uint16_t keytable_1v[] = { // two stroke 3
 	0xff, 0x00, 0x00, 0x00,
-	0x2f, 0x2d, 0x2e, 0x89,
-	0xff, 0x33, 0x34, 0x30,
-	0xff, 0x38, 0x87, 0x32,
+	0xff, 0x2e, 0x30, 0x32,
+	0xff, 0x33, 0x34, 0x2f,
+	0xff, 0x38, 0x87, 0x89,
 	0xff, 0x36, 0x37, 0x00,
 };
 
@@ -362,17 +363,19 @@ bool scan_key_matrix_line(int row)
 						break;
 					}
 				}
-				if (c & 0xff00) {
+				if (c & (MM_SINGLESHOT << 8)) {
 					current_key_code = c;
-					single_shot_state = 7;
+					single_shot_state = 6;
 					continue;
 				}
 				bool normal = true;
 				switch (i) {
 				case 4 * 2 + 0:
 					if (ex && two_stroke == 0) {
-						two_stroke = 3;
-						continue;
+						if (layout_set == 1) {
+							two_stroke = 3;
+							continue;
+						}
 					}
 					break;
 				case 4 * 3 + 0:
@@ -388,6 +391,20 @@ bool scan_key_matrix_line(int row)
 					}
 					break;
 				case 4 * 4 + 3:
+					if (key_matrix[4] & 0x01) {
+						two_stroke = 1;
+						continue;
+					}
+					if (key_matrix[3] & 0x01) {
+						two_stroke = 2;
+						continue;
+					}
+					if (key_matrix[2] & 0x01) {
+						if (layout_set == 1) {
+							two_stroke = 3;
+							continue;
+						}
+					}
 					single_shot_state |= 2; // シングルショット押下待ち
 					continue;
 				}
@@ -427,10 +444,13 @@ bool scan_key_matrix_line(int row)
 	if (is_last_row) {
 		modifiers = 0;
 
-		if (single_shot_state == 7) { // シングルショット送信予約状態？
-			single_shot_state = 8; // シングルショット送信
+		if (single_shot_state == 6) { // シングルショット送信予約状態？
+			modifiers = current_key_code >> 8;
+			single_shot_state = 7; // シングルショット送信予約状態
+		} else if (single_shot_state == 7) { // シングルショット送信予約状態？
 			modifiers = current_key_code >> 8;
 			press_key((uint8_t)current_key_code, true);
+			single_shot_state = 8; // シングルショット送信済み
 			changed = true;
 		} else {
 			auto SETMODIFIER = [&](bool f, uint8_t bit){
@@ -451,20 +471,20 @@ bool scan_key_matrix_line(int row)
 				SETMODIFIER(key_matrix[4] & 0x02, MM_SHIFT);
 				SETMODIFIER(key_matrix[4] & 0x04, MM_ALT);
 			}
-		}
 
-		if (key_matrix[4] & 0x08) {
-			modifiers |= MM_EXTRA;
-		} else {
-			if (modifiers & MM_EXTRA) {
-				// when the extra modifier released, release other modifier keys
-				extra_modifier_released = true;
-				changed = true;
-			}
-			modifiers &= ~MM_EXTRA;
-			two_stroke = 0;
-			if (single_shot_state != 8) {
-				single_shot_state = 0;
+			if (key_matrix[4] & 0x08) {
+				modifiers |= MM_EXTRA;
+			} else {
+				if (modifiers & MM_EXTRA) {
+					// when the extra modifier released, release other modifier keys
+					extra_modifier_released = true;
+					changed = true;
+				}
+				modifiers &= ~MM_EXTRA;
+				two_stroke = 0;
+				if (single_shot_state != 8) {
+					single_shot_state = 0;
+				}
 			}
 		}
 

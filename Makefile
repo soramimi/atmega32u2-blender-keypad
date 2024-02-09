@@ -1,7 +1,7 @@
 
 TARGET=atmega32u2keypad
 MCU=atmega32u2
-CFLAGS=-Os -mmcu=$(MCU) -DF_CPU=16000000UL
+CFLAGS=-Os -mmcu=$(MCU) -DF_CPU=16000000UL -Wno-narrowing
 CXXFLAGS=$(CFLAGS)
 LDFLAGS=-mmcu=$(MCU)
 
