@@ -391,18 +391,20 @@ bool scan_key_matrix_line(int row)
 					}
 					break;
 				case 4 * 4 + 3:
-					if (key_matrix[4] & 0x01) {
-						two_stroke = 1;
-						continue;
-					}
-					if (key_matrix[3] & 0x01) {
-						two_stroke = 2;
-						continue;
-					}
-					if (key_matrix[2] & 0x01) {
-						if (layout_set == 1) {
-							two_stroke = 3;
+					if (layout_set == 1) {
+						if (key_matrix[4] & 0x01) {
+							two_stroke = 1;
 							continue;
+						}
+						if (key_matrix[3] & 0x01) {
+							two_stroke = 2;
+							continue;
+						}
+						if (key_matrix[2] & 0x01) {
+							if (layout_set == 1) {
+								two_stroke = 3;
+								continue;
+							}
 						}
 					}
 					single_shot_state |= 2; // シングルショット押下待ち
